@@ -1,34 +1,89 @@
-name: Pipeline
-on: 
+name: CI/CD Python Flask API
+
+on:
   push:
     branches: [ main ]
+    tags:
+      - 'v 0.1'
   pull_request:
     branches: [ main ]
-  workflow_dispatch: 
+  # Добавляю возможность запуска вручную
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
       
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
       
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flask pytest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask pytest flake8
       
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Run code quality checks
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       
-    - name: Run tests
-      run: |
-        echo "Start app.py"
-        python -c "import app"
+      - name: Validate application startup
+        run: |
+          echo "Импорта модуля..."
+          python -c "import app"
+          echo "Проверка API"
+          python -c "from app import app; assert '/health' in [rule.rule for rule in app.url_map.iter_rules()]"
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "::set-output name=version::$(date +%Y%m%d%H%M%S)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "::set-output name=tag::${GITHUB_REF#refs/tags/}"
+          else
+            echo "::set-output name=tag::latest"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push docker hub image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/Pipeline:${{ steps.meta.outputs.tag }}
+            ${{ secrets.DOCKER_USERNAME }}/Pipeline:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+
+  deploy-notification:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deployment notification
+        run: |
+          echo "Pipeline успешно выполнен!"
+          echo "Тесты пройдены"
+          echo "Docker образ собран и опубликован в Docker Hub как ${{ secrets.DOCKER_USERNAME }}/flask-api:latest"
+          echo "Время выполнения: ${{ github.event.repository.updated_at }}"
