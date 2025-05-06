@@ -2,12 +2,11 @@ name: CI/CD Python Flask API
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     tags:
       - 'v 0.1'
   pull_request:
-    branches: [ main ]
-  # Добавляю возможность запуска вручную
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -70,8 +69,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/Pipeline:${{ steps.meta.outputs.tag }}
-            ${{ secrets.DOCKER_USERNAME }}/Pipeline:latest
+            ${{ secrets.DOCKER_USERNAME }}/pipeline:${{ steps.meta.outputs.tag }}
+            ${{ secrets.DOCKER_USERNAME }}/pipeline:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -85,5 +84,5 @@ jobs:
         run: |
           echo "Pipeline успешно выполнен!"
           echo "Тесты пройдены"
-          echo "Docker образ собран и опубликован в Docker Hub как ${{ secrets.DOCKER_USERNAME }}/flask-api:latest"
+          echo "Docker образ собран и опубликован в Docker Hub как ${{ secrets.DOCKER_USERNAME }}/pipeline:latest"
           echo "Время выполнения: ${{ github.event.repository.updated_at }}"
